@@ -9,6 +9,9 @@ import { z } from "zod";
 
 import { sharedPostgresStorage } from "./storage";
 import { inngest, inngestServe } from "./inngest";
+import { videoContentAgent } from "./agents/videoContentAgent";
+import { telegramContentWorkflow } from "./workflows/telegramContentWorkflow";
+import { registerTelegramTrigger } from "../triggers/telegramTriggers";
 
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
@@ -53,8 +56,8 @@ class ProductionPinoLogger extends MastraLogger {
 
 export const mastra = new Mastra({
   storage: sharedPostgresStorage,
-  agents: {},
-  workflows: {},
+  agents: { videoContentAgent },
+  workflows: { telegramContentWorkflow },
   mcpServers: {
     allTools: new MCPServer({
       name: "allTools",
@@ -122,6 +125,45 @@ export const mastra = new Mastra({
         // 3. Establishing a publish-subscribe system for real-time monitoring
         //    through the workflow:${workflowId}:${runId} channel
       },
+      // Telegram triggers
+      ...registerTelegramTrigger({
+        triggerType: "telegram/message",
+        handler: async (mastra: Mastra, triggerInfo: any) => {
+          const logger = mastra.getLogger();
+          logger?.info("📝 [Telegram Trigger] Received payload:", { triggerInfo });
+
+          try {
+            const telegramPayload = triggerInfo.payload;
+            const message = telegramPayload?.message?.text || telegramPayload?.callback_query?.data || "";
+            const chatId = telegramPayload?.message?.chat?.id || telegramPayload?.callback_query?.message?.chat?.id;
+            const userId = telegramPayload?.message?.from?.id || telegramPayload?.callback_query?.from?.id;
+            const messageId = telegramPayload?.message?.message_id || telegramPayload?.callback_query?.message?.message_id;
+
+            logger?.info("📝 [Telegram Trigger] Processing message:", {
+              message: message.substring(0, 100),
+              chatId,
+              userId,
+              messageId
+            });
+
+            // Создаем уникальный threadId для каждого пользователя
+            const threadId = `telegram/${userId}`;
+
+            // Запускаем workflow
+            const run = await mastra.getWorkflow("telegramContentWorkflow").createRunAsync();
+            return await run.start({
+              inputData: {
+                message: JSON.stringify(triggerInfo.payload),
+                threadId: threadId,
+              }
+            });
+
+          } catch (error) {
+            logger?.error("❌ [Telegram Trigger] Error processing trigger:", error);
+            return null;
+          }
+        },
+      }),
     ],
   },
   logger:
