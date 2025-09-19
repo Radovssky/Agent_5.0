@@ -303,17 +303,95 @@ export const comprehensiveContentAnalysisTool = createTool({
       let analyzedVideos = [];
       
       try {
-        logger?.info('📝 [ComprehensiveContentAnalysis] TEMPORARY: Skipping OpenAI analysis due to rate limits, using direct fallback...');
+        logger?.info('📝 [ComprehensiveContentAnalysis] Starting SEQUENTIAL analysis like in n8n...');
         
-        // ВРЕМЕННО: Пропускаем OpenAI запросы из-за rate limits 
-        // Используем fallback логику напрямую для стабильности системы
-        const batchResults = context.videos.map((video, index) => ({
-          video_index: index + 1,
-          transcript: `Видео контент: ${video.title}. Рассказывает о теме "${video.title.toLowerCase()}" на платформе ${video.platform}.`,
-          transcript_ru: `Видео контент: ${video.title}. Рассказывает о теме "${video.title.toLowerCase()}" на платформе ${video.platform}.`,
-          keywords: video.title.split(' ').filter(w => w.length > 2).slice(0, 4),
-          language_detected: "ru"
-        }));
+        // QUEUE-BASED ПОДХОД: Анализируем каждое видео по очереди (как в n8n)
+        const openaiClient = createOpenAI({
+          baseURL: process.env.OPENAI_BASE_URL || undefined,
+          apiKey: process.env.OPENAI_API_KEY,
+        });
+        
+        const batchResults: Array<{
+          video_index: number;
+          transcript: string;
+          transcript_ru: string;
+          keywords: string[];
+          language_detected: string;
+        }> = [];
+        
+        // Анализируем видео последовательно, по одному
+        for (let i = 0; i < context.videos.length; i++) {
+          const video = context.videos[i];
+          
+          logger?.info(`📝 [ComprehensiveContentAnalysis] Processing video ${i + 1}/${context.videos.length}: ${video.video_id}`);
+          
+          try {
+            // Задержка между запросами (как в n8n)
+            if (i > 0) {
+              logger?.info('⏱️ [ComprehensiveContentAnalysis] Waiting 2 seconds between requests...');
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+            
+            // Анализ одного видео
+            const { text: videoAnalysis } = await generateText({
+              model: openaiClient("gpt-4o"),
+              messages: [
+                {
+                  role: "system",
+                  content: `Проанализируйте это видео и верните JSON:
+{
+  "transcript": "короткое описание содержимого (30-50 слов)",
+  "transcript_ru": "русский перевод",
+  "keywords": ["3-4", "ключевых", "слова"],
+  "language_detected": "ru"
+}`
+                },
+                {
+                  role: "user",
+                  content: `Заголовок: "${video.title}"
+Описание: "${video.description || 'Нет описания'}"
+Платформа: ${video.platform}`
+                }
+              ],
+              temperature: 0.7,
+              maxTokens: 300, // Маленький лимит для одного видео
+            });
+            
+            // Парсим результат
+            try {
+              const parsed = JSON.parse(videoAnalysis);
+              batchResults.push({
+                video_index: i + 1,
+                ...parsed
+              });
+              logger?.info(`✅ [ComprehensiveContentAnalysis] Video ${i + 1} analyzed successfully`);
+            } catch (parseError) {
+              // Fallback для каждого видео
+              logger?.warn(`⚠️ [ComprehensiveContentAnalysis] Parse error for video ${i + 1}, using fallback`);
+              batchResults.push({
+                video_index: i + 1,
+                transcript: `Контент о: ${video.title}`,
+                transcript_ru: `Контент о: ${video.title}`,
+                keywords: video.title.split(' ').filter(w => w.length > 2).slice(0, 3),
+                language_detected: "ru"
+              });
+            }
+            
+          } catch (error) {
+            logger?.warn(`⚠️ [ComprehensiveContentAnalysis] OpenAI error for video ${i + 1}:`, error);
+            
+            // Fallback для видео при ошибке OpenAI  
+            batchResults.push({
+              video_index: i + 1,
+              transcript: `Анализ контента: ${video.title}`,
+              transcript_ru: `Анализ контента: ${video.title}`,
+              keywords: video.title.split(' ').filter(w => w.length > 2).slice(0, 3),
+              language_detected: "ru"
+            });
+          }
+        }
+        
+        logger?.info(`✅ [ComprehensiveContentAnalysis] Sequential analysis completed for ${batchResults.length} videos`);
 
         // Объединяем с метриками
         analyzedVideos = context.videos.map((video, index) => {
@@ -373,7 +451,7 @@ export const comprehensiveContentAnalysisTool = createTool({
       }, {} as Record<string, number>);
       
       const commonThemes = Object.entries(keywordCounts)
-        .sort(([,a], [,b]) => b - a)
+        .sort(([,a], [,b]) => (b as number) - (a as number))
         .slice(0, 5)
         .map(([keyword]) => keyword);
       
