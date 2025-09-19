@@ -12,6 +12,8 @@ import tempfile
 import logging
 from pathlib import Path
 from openai import OpenAI
+import yt_dlp
+import re
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -21,9 +23,59 @@ class AudioProcessor:
     def __init__(self):
         self.openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         
+    def is_youtube_url(self, url):
+        """Check if URL is a YouTube URL"""
+        youtube_pattern = r'(https?://)?(www\.)?(youtube\.com/(watch\?v=|embed/|v/)|youtu\.be/)'
+        return bool(re.search(youtube_pattern, url))
+        
+    def download_youtube_audio(self, youtube_url, output_path=None):
+        """
+        Download audio from YouTube using yt-dlp
+        
+        Args:
+            youtube_url (str): YouTube URL
+            output_path (str): Optional output path for audio file
+            
+        Returns:
+            str: Path to downloaded audio file
+        """
+        try:
+            if output_path is None:
+                # Create temporary file for audio
+                temp_audio = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+                output_path = temp_audio.name
+                temp_audio.close()
+            
+            logger.info(f"🎵 Downloading audio from YouTube: {youtube_url}")
+            
+            # yt-dlp options for extracting audio
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': output_path.replace('.mp3', '.%(ext)s'),
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([youtube_url])
+            
+            logger.info(f"✅ YouTube audio downloaded to: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"❌ YouTube download error: {e}")
+            raise Exception(f"YouTube download failed: {e}")
+        
     def extract_audio_from_video(self, video_url, output_path=None):
         """
-        Extract audio from video using FFmpeg
+        Extract audio from video using appropriate method
+        - YouTube URLs: yt-dlp
+        - Direct video files: FFmpeg
         
         Args:
             video_url (str): URL or path to video file
@@ -33,6 +85,11 @@ class AudioProcessor:
             str: Path to extracted audio file
         """
         try:
+            # Check if it's a YouTube URL
+            if self.is_youtube_url(video_url):
+                return self.download_youtube_audio(video_url, output_path)
+            
+            # For direct video files, use FFmpeg
             if output_path is None:
                 # Create temporary file for audio
                 temp_audio = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
@@ -61,7 +118,7 @@ class AudioProcessor:
             return output_path
             
         except subprocess.TimeoutExpired:
-            logger.error("❌ FFmpeg timeout - video too long or slow network")
+            logger.error("❌ Audio extraction timeout - video too long or slow network")
             raise Exception("Audio extraction timeout")
         except Exception as e:
             logger.error(f"❌ Audio extraction error: {e}")
