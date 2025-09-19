@@ -59,19 +59,18 @@ export const youtubeSearchTool = createTool({
     try {
       logger?.info('📝 [YouTubeSearch] Searching for videos via YouTube API...');
       
-      // Определяем временной диапазон для поиска
-      const publishedAfter = new Date(Date.now() - context.days_ago * 24 * 60 * 60 * 1000).toISOString();
-      
-      // Формируем запрос к YouTube Data API v3
+      // Формируем запрос к YouTube Data API v3 с РАСШИРЕННЫМИ параметрами
       const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
       searchUrl.searchParams.set('key', apiKey);
       searchUrl.searchParams.set('part', 'snippet');
       searchUrl.searchParams.set('type', 'video');
       searchUrl.searchParams.set('q', context.topic);
-      searchUrl.searchParams.set('maxResults', context.max_results.toString());
-      searchUrl.searchParams.set('order', 'viewCount'); // Сортировка по количеству просмотров
-      searchUrl.searchParams.set('publishedAfter', publishedAfter);
+      searchUrl.searchParams.set('maxResults', (context.max_results * 3).toString()); // Больше результатов для фильтрации
+      searchUrl.searchParams.set('order', 'relevance'); // Релевантность вместо только viewCount
+      // НЕ ограничиваем publishedAfter - ищем любые популярные видео!
       searchUrl.searchParams.set('videoDuration', 'short'); // Короткие видео (< 4 минут)
+      searchUrl.searchParams.set('safeSearch', 'moderate'); // Безопасный поиск
+      searchUrl.searchParams.set('regionCode', 'RU'); // Приоритет русскоязычному контенту
       
       logger?.info('📡 [YouTubeSearch] Making API request to YouTube search endpoint');
       
@@ -486,57 +485,21 @@ export const instagramSearchTool = createTool({
     logger?.info('🔧 [InstagramSearch] Starting execution with params:', context);
     
     try {
-      // Заглушка для Instagram API - в реальном проекте здесь будет интеграция с Instagram Basic Display API
-      logger?.info('📝 [InstagramSearch] Searching for videos...');
+      logger?.warn('⚠️ [InstagramSearch] Instagram API not configured - requires Facebook App setup');
       
-      // Симуляция поиска видео (для демонстрации)
-      const mockVideos = [
-        {
-          video_id: `ig_${Math.random().toString(36).substr(2, 9)}`,
-          platform: "instagram",
-          title: `${context.topic} Reels`,
-          description: `Популярные Reels про ${context.topic}. #${context.topic} #reels #trending`,
-          url: `https://instagram.com/reel/${Math.random().toString(36).substr(2, 9)}`,
-          thumbnail_url: `https://scontent.cdninstagram.com/mock.jpg`,
-          views: Math.floor(Math.random() * 2000000) + 25000,
-          likes: Math.floor(Math.random() * 200000) + 2500,
-          comments: Math.floor(Math.random() * 20000) + 250,
-          duration: Math.floor(Math.random() * 30) + 15, // 15-45 секунд
-          published_at: new Date(Date.now() - Math.floor(Math.random() * context.days_ago) * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          video_id: `ig_${Math.random().toString(36).substr(2, 9)}`,
-          platform: "instagram",
-          title: `Трендовый ${context.topic}`,
-          description: `Вирусный контент о ${context.topic}. Смотри до конца! #viral #${context.topic}`,
-          url: `https://instagram.com/reel/${Math.random().toString(36).substr(2, 9)}`,
-          thumbnail_url: `https://scontent.cdninstagram.com/mock2.jpg`,
-          views: Math.floor(Math.random() * 1500000) + 30000,
-          likes: Math.floor(Math.random() * 150000) + 3000,
-          comments: Math.floor(Math.random() * 15000) + 300,
-          duration: Math.floor(Math.random() * 30) + 15,
-          published_at: new Date(Date.now() - Math.floor(Math.random() * context.days_ago) * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          video_id: `ig_${Math.random().toString(36).substr(2, 9)}`,
-          platform: "instagram",
-          title: `${context.topic} хайп`,
-          description: `Самый актуальный контент про ${context.topic}! #explore #${context.topic} #fyp`,
-          url: `https://instagram.com/reel/${Math.random().toString(36).substr(2, 9)}`,
-          thumbnail_url: `https://scontent.cdninstagram.com/mock3.jpg`,
-          views: Math.floor(Math.random() * 1800000) + 40000,
-          likes: Math.floor(Math.random() * 180000) + 4000,
-          comments: Math.floor(Math.random() * 18000) + 400,
-          duration: Math.floor(Math.random() * 30) + 15,
-          published_at: new Date(Date.now() - Math.floor(Math.random() * context.days_ago) * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ].slice(0, context.max_results);
+      // Instagram API требует сложную настройку через Facebook Developer:
+      // 1. Создать Facebook App
+      // 2. Настроить Instagram Basic Display API  
+      // 3. Получить токены доступа пользователей
+      // 4. Обработать OAuth flow
       
-      logger?.info('✅ [InstagramSearch] Completed successfully, found videos:', { count: mockVideos.length });
+      // ВАЖНО: НЕ возвращаем fake данные!
+      logger?.info('📝 [InstagramSearch] Returning empty results - no mock data');
+      
       return {
-        success: true,
-        videos: mockVideos,
-        message: `Найдено ${mockVideos.length} Reels в Instagram`
+        success: false, // Важно! false чтобы система знала что платформа недоступна
+        videos: [],
+        message: `Instagram API не настроен - требуется конфигурация Facebook App`
       };
       
     } catch (error) {
@@ -668,6 +631,21 @@ export const multiPlatformSearchTool = createTool({
           message: instagramResult.message,
         },
       };
+      
+      // ИСПРАВЛЕНО: Проверяем есть ли вообще видео
+      const hasAnyVideos = sortedVideos.length > 0;
+      const hasAnySuccess = youtubeResult.success || tiktokResult.success || instagramResult.success;
+      
+      if (!hasAnyVideos) {
+        logger?.warn('⚠️ [MultiPlatformSearch] No videos found on any platform!');
+        return {
+          success: false, // ВАЖНО! false когда нет результатов
+          all_videos: [],
+          platform_results: platformResults,
+          total_found: 0,
+          message: `Не найдено видео по теме "${context.topic}" ни на одной платформе. ${Object.values(platformResults).map(p => p.message).join('; ')}`
+        };
+      }
       
       logger?.info('✅ [MultiPlatformSearch] Completed successfully, total videos:', { count: sortedVideos.length });
       return {

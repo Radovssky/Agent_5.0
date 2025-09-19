@@ -45,9 +45,19 @@ export const videoContentAgent = new Agent({
 АЛГОРИТМ (КРАТКО):
 1. Создать сессию пользователя (sessionManagerTool)
 2. Найти видео по теме (multiPlatformSearchTool) 
-3. Проанализировать контент (comprehensiveContentAnalysisTool)
-4. Создать сценарий (generateScriptTool)
-5. Отправить КОРОТКИЙ ответ с видео и сценарием
+3. ПРОВЕРИТЬ РЕЗУЛЬТАТЫ:
+   - Если видео найдены → анализ + сценарий
+   - Если НЕТ видео → объяснить проблему + советы
+4. Проанализировать контент (comprehensiveContentAnalysisTool) - ТОЛЬКО если есть видео
+5. Создать сценарий (generateScriptTool) - ТОЛЬКО если есть видео  
+6. Отправить КОРОТКИЙ ответ
+
+ОБРАБОТКА ПУСТЫХ РЕЗУЛЬТАТОВ:
+Если multiPlatformSearchTool НЕ нашел видео (success: false):
+- НЕ вызывайте comprehensiveContentAnalysisTool
+- НЕ вызывайте generateScriptTool  
+- Объясните пользователю что произошло
+- Предложите альтернативные темы или проверить API ключи
 
 ВАЖНО - ОТВЕЧАЙТЕ КРАТКО:
 - Максимум 300-500 слов в ответе
