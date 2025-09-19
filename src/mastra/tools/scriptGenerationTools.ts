@@ -96,7 +96,7 @@ ${viralVideos.slice(0, 3).map((v, i) => `${i+1}. ${v.video_id} (${v.platform}) -
       
       // Генерируем сценарий через GPT-4
       const { text: generatedScript } = await generateText({
-        model: openaiClient("gpt-4o-mini"),
+        model: openaiClient("gpt-5-mini"),
         messages: [
           {
             role: "system",

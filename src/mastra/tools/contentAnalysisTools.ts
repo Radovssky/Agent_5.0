@@ -70,7 +70,7 @@ export const videoTranscriptionTool = createTool({
                     });
                     
                     const { text: translation } = await generateText({
-                      model: openaiClient("gpt-4o-mini"),
+                      model: openaiClient("gpt-5-nano"),
                       messages: [
                         {
                           role: "user",
@@ -151,7 +151,7 @@ ${context.description ? `Описание: "${context.description}"` : ''}
       `.trim();
       
       const { text: analysisResult } = await generateText({
-        model: openaiClient("gpt-4o-mini"),
+        model: openaiClient("gpt-5-nano"),
         messages: [
           {
             role: "system",
@@ -410,7 +410,7 @@ export const comprehensiveContentAnalysisTool = createTool({
             
             // Анализ одного видео
             const { text: videoAnalysis } = await generateText({
-              model: openaiClient("gpt-3.5-turbo"),
+              model: openaiClient("gpt-5-nano"),
               messages: [
                 {
                   role: "system",
