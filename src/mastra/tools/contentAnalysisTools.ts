@@ -303,74 +303,17 @@ export const comprehensiveContentAnalysisTool = createTool({
       let analyzedVideos = [];
       
       try {
-        logger?.info('📝 [ComprehensiveContentAnalysis] Analyzing all videos in one batch request...');
+        logger?.info('📝 [ComprehensiveContentAnalysis] TEMPORARY: Skipping OpenAI analysis due to rate limits, using direct fallback...');
         
-        // Создаем OpenAI клиент для batch анализа
-        const openaiClient = createOpenAI({
-          baseURL: process.env.OPENAI_BASE_URL || undefined,
-          apiKey: process.env.OPENAI_API_KEY,
-        });
-        
-        // Формируем данные всех видео для одного запроса
-        const videosData = context.videos.map((video, index) => 
-          `ВИДЕО ${index + 1}:
-Заголовок: "${video.title || 'Untitled Video'}"
-Описание: "${video.description || 'Без описания'}"
-Платформа: ${video.platform}
-URL: ${video.url}
-ID: ${video.video_id}
----`
-        ).join('\n\n');
-
-        // Один запрос для анализа всех видео
-        const { text: batchAnalysisResult } = await generateText({
-          model: openaiClient("gpt-4o"),
-          messages: [
-            {
-              role: "system",
-              content: `Вы - эксперт по анализу видеоконтента. Проанализируйте все представленные видео и для каждого предоставьте:
-
-1. ВЕРОЯТНЫЙ ТРАНСКРИПТ (30-60 слов) - как мог бы звучать контент
-2. РУССКИЙ ПЕРЕВОД ТРАНСКРИПТА  
-3. КЛЮЧЕВЫЕ СЛОВА (3-5 слов) - основные темы
-4. ЯЗЫК КОНТЕНТА
-
-Отвечайте строго в JSON массиве:
-[
-  {
-    "video_index": 1,
-    "transcript": "английский текст...",
-    "transcript_ru": "русский перевод...", 
-    "keywords": ["слово1", "слово2", "слово3"],
-    "language_detected": "en"
-  },
-  ...
-]`
-            },
-            {
-              role: "user",
-              content: `Проанализируйте эти видео:\n\n${videosData}`
-            }
-          ],
-          temperature: 0.7,
-          maxTokens: 2000, // Увеличен лимит для batch анализа
-        });
-
-        // Парсим результат
-        let batchResults = [];
-        try {
-          batchResults = JSON.parse(batchAnalysisResult);
-        } catch (parseError) {
-          logger?.warn('⚠️ [ComprehensiveContentAnalysis] Failed to parse batch analysis, using fallback');
-          // Fallback: создаем простые результаты без OpenAI
-          batchResults = context.videos.map((video, index) => ({
-            video_index: index + 1,
-            transcript: `Контент о: ${video.title}`,
-            transcript_ru: `Контент о: ${video.title}`, 
-            keywords: video.title.split(' ').slice(0, 3),
-            language_detected: "auto"
-          }));
-        }
+        // ВРЕМЕННО: Пропускаем OpenAI запросы из-за rate limits 
+        // Используем fallback логику напрямую для стабильности системы
+        const batchResults = context.videos.map((video, index) => ({
+          video_index: index + 1,
+          transcript: `Видео контент: ${video.title}. Рассказывает о теме "${video.title.toLowerCase()}" на платформе ${video.platform}.`,
+          transcript_ru: `Видео контент: ${video.title}. Рассказывает о теме "${video.title.toLowerCase()}" на платформе ${video.platform}.`,
+          keywords: video.title.split(' ').filter(w => w.length > 2).slice(0, 4),
+          language_detected: "ru"
+        }));
 
         // Объединяем с метриками
         analyzedVideos = context.videos.map((video, index) => {
