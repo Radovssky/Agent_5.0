@@ -408,15 +408,13 @@ export const comprehensiveContentAnalysisTool = createTool({
           logger?.info(`📝 [ComprehensiveContentAnalysis] Processing video ${i + 1}/${context.videos.length}: ${video.video_id}`);
           
           try {
-            // Задержка между запросами (как в n8n)
-            if (i > 0) {
-              logger?.info('⏱️ [ComprehensiveContentAnalysis] Waiting 2 seconds between requests...');
-              await new Promise(resolve => setTimeout(resolve, 2000));
-            }
+            // Задержка между ВСЕМИ запросами для соблюдения rate limits
+            logger?.info(`⏱️ [ComprehensiveContentAnalysis] Waiting 3 seconds before video ${i + 1}...`);
+            await new Promise(resolve => setTimeout(resolve, 3000));
             
             // Анализ одного видео
             const { text: videoAnalysis } = await generateText({
-              model: openaiClient("gpt-4o"),
+              model: openaiClient("gpt-3.5-turbo"),
               messages: [
                 {
                   role: "system",
