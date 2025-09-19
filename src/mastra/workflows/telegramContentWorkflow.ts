@@ -2,84 +2,19 @@ import { createWorkflow, createStep } from "../inngest";
 import { z } from "zod";
 import { videoContentAgent } from "../agents/videoContentAgent";
 
-// Функция для отправки различных типов контента в Telegram
+// Функция для отправки контента в Telegram одним сообщением
 async function sendTelegramResponse(botToken: string, chatId: number, content: string, logger?: any) {
-  // Извлекаем все видео-строки (построчно)
-  const videoItems = content.match(/^🎬\s*ВИДЕО:\s*.+$/gm) || [];
-  let lastResponse: Response | undefined;
+  logger?.info(`📺 [SendTelegramResponse] Sending complete response as one message`);
   
-  if (videoItems.length > 0) {
-    logger?.info(`📺 [SendTelegramResponse] Found ${videoItems.length} video items to send as previews`);
-    
-    // Отправляем каждое видео как отдельное сообщение
-    for (const videoItem of videoItems) {
-      const urlMatch = videoItem.match(/https?:\/\/[^\s]+/);
-      
-      try {
-        if (urlMatch) {
-          // Отправляем ссылку с предварительным просмотром
-          lastResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: videoItem, // Отправляем полную строку как есть
-              disable_web_page_preview: false, // Включаем предварительный просмотр
-            }),
-          });
-        } else {
-          // Fallback для строк без URL - отправляем как обычный текст
-          lastResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: videoItem,
-            }),
-          });
-        }
-        
-        if (!lastResponse.ok) {
-          logger?.warn('⚠️ Failed to send video preview:', await lastResponse.text());
-        }
-      } catch (error) {
-        logger?.warn('⚠️ Video preview error:', error);
-      }
-    }
-    
-    // Удаляем видео-строки из основного контента
-    const cleanContent = content.replace(/^🎬\s*ВИДЕО:\s*.+$/gm, '').trim();
-    
-    if (cleanContent) {
-      // Отправляем оставшийся контент
-      return fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: cleanContent,
-        }),
-      });
-    } else {
-      // Если остались только видео, возвращаем последний ответ
-      return lastResponse || fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: `📺 Отправлено ${videoItems.length} видео-превью`,
-        }),
-      });
-    }
-  }
-  
-  // Стандартная отправка текста (если нет видео)
+  // Отправляем весь контент целиком одним сообщением
+  // Telegram автоматически создаст превью для всех ссылок в сообщении
   return fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
       text: content,
+      disable_web_page_preview: false, // Включаем предварительный просмотр для всех ссылок
     }),
   });
 }
