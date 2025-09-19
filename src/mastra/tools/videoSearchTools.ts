@@ -2,6 +2,19 @@ import { createTool } from "@mastra/core/tools";
 import type { IMastraLogger } from "@mastra/core/logger";
 import { z } from "zod";
 import Tiktok from "@tobyg74/tiktok-api-dl";
+import { TikTokTokenManager } from "../../lib/tiktokTokenManager";
+import { createOfficialTikTokSearchTool } from "../../lib/officialTikTokSearch";
+
+// Создаем экземпляр официального TikTok Token Manager (требует OAuth настройки)
+const createTikTokTokenManager = () => {
+  const config = {
+    client_key: process.env.TIKTOK_CLIENT_KEY || '',
+    client_secret: process.env.TIKTOK_CLIENT_SECRET || '', 
+    redirect_uri: process.env.TIKTOK_REDIRECT_URI || 'http://localhost:8080/auth/tiktok/callback'
+  };
+  
+  return new TikTokTokenManager(config);
+};
 
 // Инструмент для поиска видео в YouTube
 export const youtubeSearchTool = createTool({
@@ -152,9 +165,109 @@ export const youtubeSearchTool = createTool({
   },
 });
 
-// Инструмент для поиска видео в TikTok
+// Умный TikTok инструмент с автоматическим fallback (официальный API → старый API)
 export const tiktokSearchTool = createTool({
-  id: "tiktok-search-tool",
+  id: "smart-tiktok-search-tool",
+  description: "Ищет популярные видео в TikTok с автоматическим выбором API (официальный или legacy)",
+  inputSchema: z.object({
+    topic: z.string().describe("Тема для поиска видео"),
+    max_results: z.number().default(3).describe("Максимальное количество результатов"),
+    days_ago: z.number().default(10).describe("Искать видео не старше указанного количества дней"),
+  }),
+  outputSchema: z.object({
+    success: z.boolean(),
+    videos: z.array(z.object({
+      video_id: z.string(),
+      platform: z.string(),
+      title: z.string(),
+      description: z.string(),
+      url: z.string(),
+      thumbnail_url: z.string(),
+      views: z.number(),
+      likes: z.number(),
+      comments: z.number(),
+      duration: z.number(),
+      published_at: z.string(),
+    })),
+    message: z.string(),
+  }),
+  execute: async ({ context, mastra, runtimeContext, tracingContext }) => {
+    const logger = mastra?.getLogger();
+    logger?.info('🔄 [SmartTikTokSearch] Starting with auto-fallback logic:', context);
+    
+    // Проверяем наличие официального TikTok OAuth
+    const hasOfficialApi = !!(
+      process.env.TIKTOK_CLIENT_KEY && 
+      process.env.TIKTOK_CLIENT_SECRET && 
+      process.env.TIKTOK_REDIRECT_URI
+    );
+    
+    const hasLegacyApi = !!process.env.TIKTOK_COOKIE;
+    
+    logger?.info('🔍 [SmartTikTokSearch] API availability:', { 
+      hasOfficialApi, 
+      hasLegacyApi 
+    });
+    
+    // Стратегия 1: Попробовать официальный API (если настроен)
+    if (hasOfficialApi) {
+      try {
+        logger?.info('🚀 [SmartTikTokSearch] Trying official TikTok API...');
+        const officialTokenManager = createTikTokTokenManager();
+        const officialTool = createOfficialTikTokSearchTool(officialTokenManager);
+        const result = await officialTool.execute({ context, mastra, runtimeContext, tracingContext });
+        
+        if (result.success && result.videos.length > 0) {
+          logger?.info('✅ [SmartTikTokSearch] Official API succeeded');
+          return {
+            ...result,
+            message: `${result.message} (через официальный API)`
+          };
+        }
+        
+        logger?.warn('⚠️ [SmartTikTokSearch] Official API failed or returned no results, trying fallback...');
+      } catch (error) {
+        logger?.warn('⚠️ [SmartTikTokSearch] Official API error, trying fallback:', error);
+      }
+    }
+    
+    // Стратегия 2: Fallback на старый API (если доступен)  
+    if (hasLegacyApi) {
+      try {
+        logger?.info('🔄 [SmartTikTokSearch] Using legacy TikTok API as fallback...');
+        const legacyResult = await legacyTiktokSearchTool.execute({ context, mastra, runtimeContext, tracingContext });
+        
+        if (legacyResult.success) {
+          logger?.info('✅ [SmartTikTokSearch] Legacy API succeeded');
+          return {
+            ...legacyResult,
+            message: `${legacyResult.message} (через legacy API)`
+          };
+        }
+      } catch (error) {
+        logger?.error('❌ [SmartTikTokSearch] Legacy API also failed:', error);
+      }
+    }
+    
+    // Стратегия 3: Подсказки по настройке
+    const setupMessage = !hasOfficialApi && !hasLegacyApi 
+      ? "TikTok поиск недоступен. Настройте TIKTOK_CLIENT_KEY+TIKTOK_CLIENT_SECRET (официальный API) или TIKTOK_COOKIE (legacy API)"
+      : !hasOfficialApi
+        ? "Рекомендуется настроить официальный TikTok API (TIKTOK_CLIENT_KEY+TIKTOK_CLIENT_SECRET) для стабильной работы"
+        : "Официальный TikTok API требует завершения OAuth авторизации";
+    
+    logger?.info('💡 [SmartTikTokSearch] Providing setup guidance');
+    return {
+      success: false,
+      videos: [],
+      message: setupMessage
+    };
+  },
+});
+
+// СТАРЫЙ TikTok инструмент (неофициальный API с токенами на 10 секунд) - ЗАМЕНЕН на официальный выше
+export const legacyTiktokSearchTool = createTool({
+  id: "legacy-tiktok-search-tool",
   description: "Ищет популярные видео в TikTok по заданной теме",
   inputSchema: z.object({
     topic: z.string().describe("Тема для поиска видео"),
