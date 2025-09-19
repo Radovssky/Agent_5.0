@@ -95,7 +95,7 @@ export function registerTelegramTrigger({
                   // Прямой поиск в YouTube
                   const youtubeApiKey = process.env.YOUTUBE_API_KEY;
                   if (youtubeApiKey) {
-                    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(message)}&type=video&order=viewCount&maxResults=5&key=${youtubeApiKey}`;
+                    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(message)}&type=video&order=viewCount&maxResults=3&key=${youtubeApiKey}`;
                     const searchResponse = await fetch(searchUrl);
                     const searchData = await searchResponse.json();
                     
