@@ -114,23 +114,43 @@ export function registerTelegramTrigger({
                       const scriptContent = `Проанализировав ${searchData.items.length} популярных видео по теме "${message}", я выявил главные паттерны успеха. Оказывается, все успешные авторы используют три ключевых элемента: захватывающий хук в первые секунды, структурированная подача информации, и четкий призыв к действию.`;
                       const scriptCTA = `Если этот анализ был полезен - ставьте лайк! Хотите больше таких разборов - подписывайтесь! И обязательно напишите в комментариях, какую тему проанализировать следующей!`;
                       
-                      const fullResponse = `🎯 **НАЙДЕННЫЕ ПОПУЛЯРНЫЕ ВИДЕО:**\n\n${videoList}\n\n` +
-                                         `📝 **СГЕНЕРИРОВАННЫЙ СЦЕНАРИЙ:**\n\n` +
-                                         `**Заголовок:** ${scriptTitle}\n\n` +
-                                         `**Хук (первые 5 секунд):**\n${scriptHook}\n\n` +
-                                         `**Основное содержание:**\n${scriptContent}\n\n` +
-                                         `**Призыв к действию:**\n${scriptCTA}\n\n` +
-                                         `✨ *Сценарий создан на основе анализа трендов YouTube*`;
+                      // Упрощенный ответ без Markdown для избежания ошибок
+                      const fullResponse = `🎯 НАЙДЕННЫЕ ПОПУЛЯРНЫЕ ВИДЕО:\n\n${videoList}\n\n📝 СГЕНЕРИРОВАННЫЙ СЦЕНАРИЙ:\n\nЗаголовок: ${scriptTitle}\n\nХук (первые 5 секунд):\n${scriptHook}\n\nОсновное содержание:\n${scriptContent}\n\nПризыв к действию:\n${scriptCTA}\n\n✨ Сценарий создан на основе анализа трендов YouTube`;
                       
-                      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          chat_id: chatId,
-                          text: fullResponse,
-                          parse_mode: "Markdown"
-                        })
-                      });
+                      // Разбиваем длинные сообщения на части (Telegram лимит ~4096 символов)
+                      if (fullResponse.length > 4000) {
+                        // Отправляем видео отдельно
+                        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            chat_id: chatId,
+                            text: `🎯 НАЙДЕННЫЕ ПОПУЛЯРНЫЕ ВИДЕО:\n\n${videoList}`
+                          })
+                        });
+                        
+                        // Отправляем сценарий отдельно
+                        const scriptResponse = `📝 СГЕНЕРИРОВАННЫЙ СЦЕНАРИЙ:\n\nЗаголовок: ${scriptTitle}\n\nХук (первые 5 секунд):\n${scriptHook}\n\nОсновное содержание:\n${scriptContent}\n\nПризыв к действию:\n${scriptCTA}\n\n✨ Сценарий создан на основе анализа трендов YouTube`;
+                        
+                        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            chat_id: chatId,
+                            text: scriptResponse
+                          })
+                        });
+                        
+                      } else {
+                        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            chat_id: chatId,
+                            text: fullResponse
+                          })
+                        });
+                      }
                       
                       logger?.info('✅ [Telegram] Successfully sent direct response with videos and script');
                       
