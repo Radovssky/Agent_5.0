@@ -45,10 +45,11 @@ export function registerTelegramTrigger({
           
           // Отправляем немедленный ответ пользователю через Telegram API
           const chatId = payload.message?.chat?.id || payload.callback_query?.message?.chat?.id;
-          if (chatId && message === '/start') {
-            const botToken = process.env.TELEGRAM_BOT_TOKEN;
-            if (botToken) {
-              try {
+          const botToken = process.env.TELEGRAM_BOT_TOKEN;
+          
+          if (chatId && botToken) {
+            try {
+              if (message === '/start') {
                 await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -57,10 +58,21 @@ export function registerTelegramTrigger({
                     text: '🤖 Привет! Я Video Content Agent.\n\nОтправьте мне тему для поиска видео, и я найду популярные ролики, проанализирую их и создам для вас сценарий на русском языке.\n\nНапример: "Как приготовить пиццу дома"'
                   })
                 });
-                logger?.info('✅ [Telegram] Sent immediate reply to user');
-              } catch (error) {
-                logger?.error('❌ [Telegram] Failed to send immediate reply:', error);
+                logger?.info('✅ [Telegram] Sent /start reply');
+              } else if (message && message.length > 0) {
+                // Отправляем сообщение о начале обработки
+                await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    chat_id: chatId,
+                    text: `🔍 Ищу популярные видео по теме: "${message}"...\n\nЭто может занять несколько секунд.`
+                  })
+                });
+                logger?.info('✅ [Telegram] Sent processing message');
               }
+            } catch (error) {
+              logger?.error('❌ [Telegram] Failed to send immediate reply:', error);
             }
           }
 

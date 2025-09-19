@@ -32,58 +32,112 @@ export const youtubeSearchTool = createTool({
     const logger = mastra?.getLogger();
     logger?.info('🔧 [YouTubeSearch] Starting execution with params:', context);
     
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      logger?.error('❌ [YouTubeSearch] No YouTube API key found');
+      return {
+        success: false,
+        videos: [],
+        message: 'YouTube API ключ не найден в переменных окружения'
+      };
+    }
+    
     try {
-      // Заглушка для YouTube API - в реальном проекте здесь будет интеграция с YouTube Data API
-      logger?.info('📝 [YouTubeSearch] Searching for videos...');
+      logger?.info('📝 [YouTubeSearch] Searching for videos via YouTube API...');
       
-      // Симуляция поиска видео (для демонстрации)
-      const mockVideos = [
-        {
-          video_id: `yt_${Math.random().toString(36).substr(2, 9)}`,
-          platform: "youtube",
-          title: `${context.topic} - Популярное видео 1`,
-          description: `Описание видео о ${context.topic}. Это тренд, который набирает популярность.`,
-          url: `https://youtube.com/shorts/mock_${Math.random().toString(36).substr(2, 9)}`,
-          thumbnail_url: `https://img.youtube.com/vi/mock/hqdefault.jpg`,
-          views: Math.floor(Math.random() * 1000000) + 10000,
-          likes: Math.floor(Math.random() * 50000) + 1000,
-          comments: Math.floor(Math.random() * 5000) + 100,
-          duration: Math.floor(Math.random() * 30) + 15, // 15-45 секунд
-          published_at: new Date(Date.now() - Math.floor(Math.random() * context.days_ago) * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          video_id: `yt_${Math.random().toString(36).substr(2, 9)}`,
-          platform: "youtube",
-          title: `${context.topic} - Вирусный контент`,
-          description: `Еще одно видео про ${context.topic} с высоким engagement.`,
-          url: `https://youtube.com/shorts/mock_${Math.random().toString(36).substr(2, 9)}`,
-          thumbnail_url: `https://img.youtube.com/vi/mock2/hqdefault.jpg`,
-          views: Math.floor(Math.random() * 2000000) + 50000,
-          likes: Math.floor(Math.random() * 100000) + 5000,
-          comments: Math.floor(Math.random() * 10000) + 500,
-          duration: Math.floor(Math.random() * 30) + 15,
-          published_at: new Date(Date.now() - Math.floor(Math.random() * context.days_ago) * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          video_id: `yt_${Math.random().toString(36).substr(2, 9)}`,
-          platform: "youtube",
-          title: `Лучшее про ${context.topic}`,
-          description: `Топовое видео о ${context.topic} с отличными метриками.`,
-          url: `https://youtube.com/shorts/mock_${Math.random().toString(36).substr(2, 9)}`,
-          thumbnail_url: `https://img.youtube.com/vi/mock3/hqdefault.jpg`,
-          views: Math.floor(Math.random() * 1500000) + 25000,
-          likes: Math.floor(Math.random() * 75000) + 2500,
-          comments: Math.floor(Math.random() * 7500) + 250,
-          duration: Math.floor(Math.random() * 30) + 15,
-          published_at: new Date(Date.now() - Math.floor(Math.random() * context.days_ago) * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ].slice(0, context.max_results);
+      // Определяем временной диапазон для поиска
+      const publishedAfter = new Date(Date.now() - context.days_ago * 24 * 60 * 60 * 1000).toISOString();
       
-      logger?.info('✅ [YouTubeSearch] Completed successfully, found videos:', { count: mockVideos.length });
+      // Формируем запрос к YouTube Data API v3
+      const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
+      searchUrl.searchParams.set('key', apiKey);
+      searchUrl.searchParams.set('part', 'snippet');
+      searchUrl.searchParams.set('type', 'video');
+      searchUrl.searchParams.set('q', context.topic);
+      searchUrl.searchParams.set('maxResults', context.max_results.toString());
+      searchUrl.searchParams.set('order', 'viewCount'); // Сортировка по количеству просмотров
+      searchUrl.searchParams.set('publishedAfter', publishedAfter);
+      searchUrl.searchParams.set('videoDuration', 'short'); // Короткие видео (< 4 минут)
+      
+      logger?.info('📡 [YouTubeSearch] Making API request to:', searchUrl.toString());
+      
+      const searchResponse = await fetch(searchUrl.toString());
+      const searchData = await searchResponse.json();
+      
+      if (!searchResponse.ok || searchData.error) {
+        const errorMsg = searchData.error?.message || `HTTP ${searchResponse.status}`;
+        logger?.error('❌ [YouTubeSearch] API error:', errorMsg);
+        return {
+          success: false,
+          videos: [],
+          message: `Ошибка YouTube API: ${errorMsg}`
+        };
+      }
+      
+      if (!searchData.items || searchData.items.length === 0) {
+        logger?.info('ℹ️ [YouTubeSearch] No videos found');
+        return {
+          success: true,
+          videos: [],
+          message: `Не найдено видео по теме "${context.topic}" за последние ${context.days_ago} дней`
+        };
+      }
+      
+      // Получаем детальную информацию о видео (статистика, длительность)
+      const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',');
+      const detailsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
+      detailsUrl.searchParams.set('key', apiKey);
+      detailsUrl.searchParams.set('part', 'statistics,contentDetails');
+      detailsUrl.searchParams.set('id', videoIds);
+      
+      logger?.info('📡 [YouTubeSearch] Getting video details for IDs:', videoIds);
+      
+      const detailsResponse = await fetch(detailsUrl.toString());
+      const detailsData = await detailsResponse.json();
+      
+      if (!detailsResponse.ok || detailsData.error) {
+        const errorMsg = detailsData.error?.message || `HTTP ${detailsResponse.status}`;
+        logger?.warn('⚠️ [YouTubeSearch] Details API error, using basic data:', errorMsg);
+      }
+      
+      // Функция для парсинга ISO 8601 длительности (PT1M30S -> 90 секунд)
+      const parseDuration = (duration: string): number => {
+        const match = duration.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
+        const minutes = parseInt(match?.[1] || '0');
+        const seconds = parseInt(match?.[2] || '0');
+        return minutes * 60 + seconds;
+      };
+      
+      // Объединяем данные поиска и детализации
+      const videos = searchData.items.map((item: any, index: number) => {
+        const details = detailsData.items?.[index];
+        const statistics = details?.statistics || {};
+        const contentDetails = details?.contentDetails || {};
+        
+        return {
+          video_id: item.id.videoId,
+          platform: "youtube",
+          title: item.snippet.title,
+          description: item.snippet.description || `Видео о ${context.topic}`,
+          url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+          thumbnail_url: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url || '',
+          views: parseInt(statistics.viewCount || '0'),
+          likes: parseInt(statistics.likeCount || '0'),
+          comments: parseInt(statistics.commentCount || '0'),
+          duration: parseDuration(contentDetails.duration || 'PT0S'),
+          published_at: item.snippet.publishedAt,
+        };
+      });
+      
+      logger?.info('✅ [YouTubeSearch] Completed successfully, found videos:', { 
+        count: videos.length,
+        totalViews: videos.reduce((sum: number, v: any) => sum + v.views, 0)
+      });
+      
       return {
         success: true,
-        videos: mockVideos,
-        message: `Найдено ${mockVideos.length} видео на YouTube`
+        videos: videos,
+        message: `Найдено ${videos.length} популярных видео на YouTube по теме "${context.topic}"`
       };
       
     } catch (error) {
@@ -91,7 +145,7 @@ export const youtubeSearchTool = createTool({
       return {
         success: false,
         videos: [],
-        message: `Ошибка поиска на YouTube: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Ошибка поиска на YouTube: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`
       };
     }
   },
