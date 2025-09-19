@@ -11,8 +11,8 @@ packages = ["jq"]
 
 [deployment]
 build = ["bash", "scripts/build.sh"]
-run = ["sh", "-c", "cd .mastra/output && NODE_ENV=production node index.mjs"]
-deploymentTarget = "cloudrun"
+run = ["bash", "-c", "npm run dev & npx inngest-cli dev -u http://localhost:3001/api/inngest --host 127.0.0.1 --port 3000 & wait"]
+deploymentTarget = "vm"
 
 [[ports]]
 localPort = 3000
