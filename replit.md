@@ -57,17 +57,35 @@ The system follows a modular agent-based architecture:
 
 ### Implementation Status
 **Production Ready:**
-- Database operations and session management
+- Database operations and session management  
 - Telegram bot integration and messaging
 - Workflow orchestration infrastructure
 - Metrics analysis algorithms
+- YouTube video search and metadata retrieval
+- Real audio transcription using FFmpeg + OpenAI Whisper ($0.006/minute)
+- AI script generation using GPT-5
 
 **Stub Implementations (Require Integration):**
-- Video search APIs (YouTube, TikTok, Instagram)
-- Video transcription services
-- AI script generation (currently uses templates)
+- TikTok video search (temporarily disabled)
+- Instagram video search
 - HeyGen video creation integration
 - Blotato social media publishing
+
+**TikTok Integration Solutions (For Future Implementation):**
+1. **David Teather's TikTok-Api (Free)** - Complex setup:
+   - Requires browser dependencies (libnspr4, libnss3, etc.)
+   - Needs ms_token authentication from browser
+   - Nix environment compatibility issues
+
+2. **Fast TikTok API (Paid)** - Recommended solution:
+   - Cost: $0.01 per 1000 search results
+   - No authentication complexity
+   - Ready to use API endpoints
+   - Total cost estimate: ~$3 per 1000 videos processed
+
+3. **ScrapTik API (Paid)** - Alternative:
+   - Cost: $0.002 per request
+   - Reliable scraping service
 
 ## External Dependencies
 

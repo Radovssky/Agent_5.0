@@ -192,74 +192,16 @@ export const tiktokSearchTool = createTool({
   }),
   execute: async ({ context, mastra, runtimeContext, tracingContext }) => {
     const logger = mastra?.getLogger();
-    logger?.info('🔄 [SmartTikTokSearch] Starting with auto-fallback logic:', context);
+    logger?.warn('⚠️ [SmartTikTokSearch] TikTok модуль временно отключен для стабильности системы');
     
-    // Проверяем наличие официального TikTok OAuth
-    const hasOfficialApi = !!(
-      process.env.TIKTOK_CLIENT_KEY && 
-      process.env.TIKTOK_CLIENT_SECRET && 
-      process.env.TIKTOK_REDIRECT_URI
-    );
+    // ВРЕМЕННО ОТКЛЮЧЕН: TikTok API требует сложную настройку
+    // David Teather's API: нужны браузерные зависимости + ms_token токены
+    // Альтернативы: Fast TikTok API ($0.01/1000) или ScrapTik ($0.002/request)
     
-    const hasLegacyApi = !!process.env.TIKTOK_COOKIE;
-    
-    logger?.info('🔍 [SmartTikTokSearch] API availability:', { 
-      hasOfficialApi, 
-      hasLegacyApi 
-    });
-    
-    // Стратегия 1: Попробовать официальный API (если настроен)
-    if (hasOfficialApi) {
-      try {
-        logger?.info('🚀 [SmartTikTokSearch] Trying official TikTok API...');
-        const officialTokenManager = createTikTokTokenManager();
-        const officialTool = createOfficialTikTokSearchTool(officialTokenManager);
-        const result = await officialTool.execute({ context, mastra, runtimeContext, tracingContext });
-        
-        if (result.success && result.videos.length > 0) {
-          logger?.info('✅ [SmartTikTokSearch] Official API succeeded');
-          return {
-            ...result,
-            message: `${result.message} (через официальный API)`
-          };
-        }
-        
-        logger?.warn('⚠️ [SmartTikTokSearch] Official API failed or returned no results, trying fallback...');
-      } catch (error) {
-        logger?.warn('⚠️ [SmartTikTokSearch] Official API error, trying fallback:', error);
-      }
-    }
-    
-    // Стратегия 2: Fallback на старый API (если доступен)  
-    if (hasLegacyApi) {
-      try {
-        logger?.info('🔄 [SmartTikTokSearch] Using legacy TikTok API as fallback...');
-        const legacyResult = await legacyTiktokSearchTool.execute({ context, mastra, runtimeContext, tracingContext });
-        
-        if (legacyResult.success) {
-          logger?.info('✅ [SmartTikTokSearch] Legacy API succeeded');
-          return {
-            ...legacyResult,
-            message: `${legacyResult.message} (через legacy API)`
-          };
-        }
-      } catch (error) {
-        logger?.error('❌ [SmartTikTokSearch] Legacy API also failed:', error);
-      }
-    }
-    
-    // Стратегия 3: Подсказки по настройке
-    const setupMessage = !hasOfficialApi && !hasLegacyApi 
-      ? "TikTok поиск недоступен. Настройте TIKTOK_CLIENT_KEY+TIKTOK_CLIENT_SECRET (официальный API) или TIKTOK_COOKIE (legacy API)"
-      : !hasOfficialApi
-        ? "Рекомендуется настроить официальный TikTok API (TIKTOK_CLIENT_KEY+TIKTOK_CLIENT_SECRET) для стабильной работы"
-        : "Официальный TikTok API требует завершения OAuth авторизации";
-    
-    logger?.info('💡 [SmartTikTokSearch] Providing setup guidance');
     return {
       success: false,
       videos: [],
-      message: setupMessage
+      message: `TikTok поиск временно отключен. Рассматриваем переход на Fast TikTok API ($0.01 за 1000 результатов). Используйте пока YouTube поиск.`
     };
   },
 });
