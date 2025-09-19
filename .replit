@@ -2,7 +2,7 @@ modules = ["nodejs-20", "bash"]
 
 [agent]
 stack = "AGENT_STACK"
-integrations = ["agentstack-trigger-telegram:1.0.0"]
+integrations = ["agentstack-trigger-telegram:1.0.0", "javascript_database:1.0.0"]
 expertMode = true
 
 [nix]
