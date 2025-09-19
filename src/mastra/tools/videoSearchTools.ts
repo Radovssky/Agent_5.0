@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import type { IMastraLogger } from "@mastra/core/logger";
 import { z } from "zod";
+import Tiktok from "@tobyg74/tiktok-api-dl";
 
 // Инструмент для поиска видео в YouTube
 export const youtubeSearchTool = createTool({
@@ -59,7 +60,7 @@ export const youtubeSearchTool = createTool({
       searchUrl.searchParams.set('publishedAfter', publishedAfter);
       searchUrl.searchParams.set('videoDuration', 'short'); // Короткие видео (< 4 минут)
       
-      logger?.info('📡 [YouTubeSearch] Making API request to:', searchUrl.toString());
+      logger?.info('📡 [YouTubeSearch] Making API request to YouTube search endpoint');
       
       const searchResponse = await fetch(searchUrl.toString());
       const searchData = await searchResponse.json();
@@ -181,66 +182,161 @@ export const tiktokSearchTool = createTool({
     const logger = mastra?.getLogger();
     logger?.info('🔧 [TikTokSearch] Starting execution with params:', context);
     
+    // Проверяем наличие cookie для TikTok API
+    const tiktokCookie = process.env.TIKTOK_COOKIE;
+    const tiktokProxy = process.env.TIKTOK_PROXY;
+    
+    if (!tiktokCookie) {
+      logger?.warn('⚠️ [TikTokSearch] No TikTok cookie found, cannot search real TikTok videos');
+      return {
+        success: false,
+        videos: [],
+        message: `TikTok поиск недоступен: требуется настройка переменной среды TIKTOK_COOKIE для работы с TikTok API`
+      };
+    }
+    
     try {
-      // Заглушка для TikTok API - в реальном проекте здесь будет интеграция с TikTok API
-      logger?.info('📝 [TikTokSearch] Searching for videos...');
+      logger?.info('📝 [TikTokSearch] Searching for videos via TikTok API...');
       
-      // Симуляция поиска видео (для демонстрации)
-      const mockVideos = [
-        {
-          video_id: `tt_${Math.random().toString(36).substr(2, 9)}`,
-          platform: "tiktok",
-          title: `#${context.topic} тренд`,
-          description: `Популярное видео про ${context.topic} в TikTok`,
-          url: `https://tiktok.com/@user/video/${Math.random().toString(36).substr(2, 9)}`,
-          thumbnail_url: `https://p16-sign-va.tiktokcdn.com/mock.jpeg`,
-          views: Math.floor(Math.random() * 5000000) + 100000,
-          likes: Math.floor(Math.random() * 500000) + 10000,
-          comments: Math.floor(Math.random() * 50000) + 1000,
-          duration: Math.floor(Math.random() * 45) + 15, // 15-60 секунд
-          published_at: new Date(Date.now() - Math.floor(Math.random() * context.days_ago) * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          video_id: `tt_${Math.random().toString(36).substr(2, 9)}`,
-          platform: "tiktok",
-          title: `${context.topic} вайб`,
-          description: `Крутой ${context.topic} контент с высокими просмотрами`,
-          url: `https://tiktok.com/@user2/video/${Math.random().toString(36).substr(2, 9)}`,
-          thumbnail_url: `https://p16-sign-va.tiktokcdn.com/mock2.jpeg`,
-          views: Math.floor(Math.random() * 3000000) + 50000,
-          likes: Math.floor(Math.random() * 300000) + 5000,
-          comments: Math.floor(Math.random() * 30000) + 500,
-          duration: Math.floor(Math.random() * 45) + 15,
-          published_at: new Date(Date.now() - Math.floor(Math.random() * context.days_ago) * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          video_id: `tt_${Math.random().toString(36).substr(2, 9)}`,
-          platform: "tiktok",
-          title: `Лучший ${context.topic}`,
-          description: `Топ видео про ${context.topic} - обязательно к просмотру!`,
-          url: `https://tiktok.com/@user3/video/${Math.random().toString(36).substr(2, 9)}`,
-          thumbnail_url: `https://p16-sign-va.tiktokcdn.com/mock3.jpeg`,
-          views: Math.floor(Math.random() * 4000000) + 75000,
-          likes: Math.floor(Math.random() * 400000) + 7500,
-          comments: Math.floor(Math.random() * 40000) + 750,
-          duration: Math.floor(Math.random() * 45) + 15,
-          published_at: new Date(Date.now() - Math.floor(Math.random() * context.days_ago) * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ].slice(0, context.max_results);
+      // Формируем параметры для поиска
+      const searchOptions: any = {
+        type: "video",
+        page: 1,
+        cookie: tiktokCookie
+      };
       
-      logger?.info('✅ [TikTokSearch] Completed successfully, found videos:', { count: mockVideos.length });
+      if (tiktokProxy) {
+        searchOptions.proxy = tiktokProxy;
+      }
+      
+      // Поиск видео через TikTok API
+      const searchResult: any = await Tiktok.Search(context.topic, searchOptions);
+      
+      // Обрабатываем разные возможные структуры ответа
+      let videosArray: any[] = [];
+      
+      if (searchResult?.result?.videos && Array.isArray(searchResult.result.videos)) {
+        videosArray = searchResult.result.videos;
+      } else if (searchResult?.videos && Array.isArray(searchResult.videos)) {
+        videosArray = searchResult.videos;
+      } else if (Array.isArray(searchResult)) {
+        videosArray = searchResult;
+      } else if (searchResult?.data && Array.isArray(searchResult.data)) {
+        videosArray = searchResult.data;
+      }
+      
+      if (videosArray.length === 0) {
+        logger?.info('ℹ️ [TikTokSearch] No videos found');
+        return {
+          success: true,
+          videos: [],
+          message: `Не найдено видео по теме "${context.topic}" в TikTok`
+        };
+      }
+      
+      // Функция для безопасного парсинга числовых значений
+      const parseCount = (countStr: any): number => {
+        if (!countStr) return 0;
+        const str = String(countStr).toLowerCase().replace(/,/g, '');
+        if (str.includes('k')) {
+          return Math.floor(parseFloat(str.replace('k', '')) * 1000);
+        } else if (str.includes('m')) {
+          return Math.floor(parseFloat(str.replace('m', '')) * 1000000);
+        } else if (str.includes('b')) {
+          return Math.floor(parseFloat(str.replace('b', '')) * 1000000000);
+        }
+        return parseInt(str) || 0;
+      };
+      
+      // Функция для извлечения ID видео из URL
+      const extractVideoId = (url: string): string => {
+        if (!url) return `tt_${Math.random().toString(36).substr(2, 9)}`;
+        try {
+          const urlObj = new URL(url);
+          const pathParts = urlObj.pathname.split('/');
+          const videoIndex = pathParts.findIndex(part => part === 'video');
+          if (videoIndex !== -1 && pathParts[videoIndex + 1]) {
+            return pathParts[videoIndex + 1];
+          }
+          return pathParts.pop() || `tt_${Math.random().toString(36).substr(2, 9)}`;
+        } catch {
+          return url.split('/').pop() || `tt_${Math.random().toString(36).substr(2, 9)}`;
+        }
+      };
+      
+      // Фильтруем и обрабатываем результаты
+      const cutoffDate = new Date(Date.now() - context.days_ago * 24 * 60 * 60 * 1000);
+      
+      const filteredVideos = videosArray
+        .filter((video: any) => {
+          // Фильтруем по дате публикации если доступна
+          if (video.createTime) {
+            const publishDate = new Date(video.createTime * 1000);
+            return publishDate >= cutoffDate;
+          }
+          return true; // Оставляем видео без даты
+        })
+        .sort((a: any, b: any) => {
+          // Сортируем по популярности (количество просмотров)
+          const aViews = parseCount((a.stats?.playCount || a.stats?.viewCount || a.views || '0'));
+          const bViews = parseCount((b.stats?.playCount || b.stats?.viewCount || b.views || '0'));
+          return bViews - aViews;
+        })
+        .slice(0, context.max_results);
+      
+      const videos = filteredVideos.map((video: any) => {
+        // Извлекаем статистику из объекта stats если он есть
+        const stats = video.stats || {};
+        const views = parseCount(stats.playCount || stats.viewCount || video.views || '0');
+        const likes = parseCount(stats.likeCount || video.likes || '0');
+        const comments = parseCount(stats.commentCount || video.comments || '0');
+        
+        // Форматируем дату публикации
+        let publishedAt = new Date().toISOString();
+        if (video.createTime) {
+          publishedAt = new Date(video.createTime * 1000).toISOString();
+        } else if (video.published_at) {
+          publishedAt = video.published_at;
+        }
+        
+        // Строим корректный URL для TikTok видео
+        let videoUrl = video.url;
+        if (!videoUrl && video.author?.uniqueId && (video.id || video.aweme_id)) {
+          videoUrl = `https://www.tiktok.com/@${video.author.uniqueId}/video/${video.id || video.aweme_id}`;
+        } else if (!videoUrl) {
+          videoUrl = `https://www.tiktok.com/search?q=${encodeURIComponent(context.topic)}`;
+        }
+        
+        return {
+          video_id: video.id || video.aweme_id || extractVideoId(video.url),
+          platform: "tiktok",
+          title: video.title || video.desc || `#${context.topic} видео`,
+          description: video.description || video.desc || `Видео о ${context.topic} в TikTok`,
+          url: videoUrl,
+          thumbnail_url: video.cover || video.dynamicCover || video.thumbnail || '',
+          views: views,
+          likes: likes,
+          comments: comments,
+          duration: video.duration || 30,
+          published_at: publishedAt,
+        };
+      });
+      
+      logger?.info('✅ [TikTokSearch] Completed successfully, found videos:', { count: videos.length });
       return {
         success: true,
-        videos: mockVideos,
-        message: `Найдено ${mockVideos.length} видео в TikTok`
+        videos: videos,
+        message: `Найдено ${videos.length} видео в TikTok по теме "${context.topic}"`
       };
       
     } catch (error) {
       logger?.error('❌ [TikTokSearch] Search error:', error);
+      
+      // В случае ошибки API возвращаем ошибку, но с fallback данными для демонстрации
       return {
         success: false,
         videos: [],
-        message: `Ошибка поиска в TikTok: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Ошибка поиска в TikTok: ${error instanceof Error ? error.message : 'Unknown error'}. Требуется настройка TIKTOK_COOKIE для работы с реальным API.`
       };
     }
   },
