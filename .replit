@@ -59,12 +59,12 @@ name = "Start application"
 author = "agent"
 
 [workflows.workflow.metadata]
-outputType = "console"
+outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run dev"
-waitForPort = 3001
+waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Start inngest server"

@@ -81,7 +81,7 @@ export const mastra = new Mastra({
   },
   server: {
     host: "0.0.0.0",
-    port: 3001,
+    port: 5000,
     middleware: [
       async (c, next) => {
         const mastra = c.get("mastra");
