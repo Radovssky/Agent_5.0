@@ -76,7 +76,7 @@ export const videoContentAgent = new Agent({
 
 Вы обязаны создать ПОЛНОЦЕННЫЙ контент-анализ, а не просто список ссылок!`,
 
-  model: openai("gpt-4o"),
+  model: openai("gpt-4o-mini"),
 
   tools: {
     // Инструменты для работы с базой данных

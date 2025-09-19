@@ -70,9 +70,7 @@ export const videoTranscriptionTool = createTool({
                     });
                     
                     const { text: translation } = await generateText({
-                      // the newest OpenAI model is "gpt-5" which was released August 7, 2025.
-                      // do not change this unless explicitly requested by the user
-                      model: openaiClient("gpt-5"),
+                      model: openaiClient("gpt-4o-mini"),
                       messages: [
                         {
                           role: "user",
@@ -153,9 +151,7 @@ ${context.description ? `Описание: "${context.description}"` : ''}
       `.trim();
       
       const { text: analysisResult } = await generateText({
-        // the newest OpenAI model is "gpt-5" which was released August 7, 2025.
-        // do not change this unless explicitly requested by the user
-        model: openaiClient("gpt-5"),
+        model: openaiClient("gpt-4o-mini"),
         messages: [
           {
             role: "system",
