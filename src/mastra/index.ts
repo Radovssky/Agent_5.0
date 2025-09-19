@@ -81,7 +81,7 @@ export const mastra = new Mastra({
   },
   server: {
     host: "0.0.0.0",
-    port: 5000,
+    port: 3001,
     middleware: [
       async (c, next) => {
         const mastra = c.get("mastra");
@@ -151,7 +151,7 @@ export const mastra = new Mastra({
 
             // Запускаем workflow
             const run = await mastra.getWorkflow("telegramContentWorkflow").createRunAsync();
-            return await run.start({
+            await run.start({
               inputData: {
                 message: JSON.stringify(triggerInfo.payload),
                 threadId: threadId,
@@ -160,7 +160,6 @@ export const mastra = new Mastra({
 
           } catch (error) {
             logger?.error("❌ [Telegram Trigger] Error processing trigger:", error);
-            return null;
           }
         },
       }),
