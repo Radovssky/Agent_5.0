@@ -514,7 +514,7 @@ export const activityLoggerTool = createTool({
     telegram_user_id: z.number().describe("ID пользователя Telegram"),
     action: z.string().describe("Название действия (search_started, videos_found, script_generated, etc.)"),
     message: z.string().optional().describe("Сообщение о событии"),
-    data: z.record(z.any()).default({}).describe("Дополнительные данные события"),
+    data: z.record(z.string(), z.any()).default({}).describe("Дополнительные данные события"),
     status: z.enum(["success", "error", "warning"]).default("success").describe("Статус события"),
   }),
   outputSchema: z.object({
