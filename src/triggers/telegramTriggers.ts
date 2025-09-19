@@ -39,12 +39,29 @@ export function registerTelegramTrigger({
 
           logger?.info("📝 [Telegram] payload", payload);
 
-          // Безопасное извлечение данных из payload
-          const message = payload.message?.text || payload.callback_query?.data || "";
-          const userName = payload.message?.from?.username || payload.callback_query?.from?.username || "";
+          // Расширенное извлечение данных из payload с отладкой
+          const message = payload.message?.text || payload.callback_query?.data || payload.edited_message?.text || "";
+          const userName = payload.message?.from?.username || payload.callback_query?.from?.username || payload.edited_message?.from?.username || "";
           
-          // Отправляем немедленный ответ пользователю через Telegram API
-          const chatId = payload.message?.chat?.id || payload.callback_query?.message?.chat?.id;
+          // Улучшенное извлечение chat ID из различных типов сообщений
+          let chatId = null;
+          if (payload.message?.chat?.id) {
+            chatId = payload.message.chat.id;
+          } else if (payload.callback_query?.message?.chat?.id) {
+            chatId = payload.callback_query.message.chat.id;
+          } else if (payload.edited_message?.chat?.id) {
+            chatId = payload.edited_message.chat.id;
+          }
+          
+          // Отладочная информация
+          logger?.info('📝 [Telegram] Debug info:', {
+            hasMessage: !!payload.message,
+            hasCallbackQuery: !!payload.callback_query,
+            hasEditedMessage: !!payload.edited_message,
+            extractedChatId: chatId,
+            extractedMessage: message,
+            extractedUserName: userName
+          });
           const botToken = process.env.TELEGRAM_BOT_TOKEN;
           
           if (chatId && botToken) {
