@@ -17,18 +17,13 @@ deploymentTarget = "vm"
 [[ports]]
 localPort = 3000
 externalPort = 3000
-exposeLocalhost = true
-
-[[ports]]
-localPort = 3001
-externalPort = 3003
-
-[[ports]]
-localPort = 5000
-externalPort = 80
 
 [[ports]]
 localPort = 8289
+
+[[ports]]
+localPort = 35117
+externalPort = 3001
 
 [[ports]]
 localPort = 50052
@@ -36,7 +31,7 @@ externalPort = 3002
 
 [[ports]]
 localPort = 50053
-externalPort = 3001
+externalPort = 80
 
 [workflows]
 runButton = "Project"
@@ -48,26 +43,26 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start application"
+args = "Mastra Server"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Start inngest server"
+args = "Inngest Server"
 
 [[workflows.workflow]]
-name = "Start application"
+name = "Mastra Server"
 author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow]]
-name = "Start inngest server"
+name = "Inngest Server"
 author = "agent"
 
 [workflows.workflow.metadata]
@@ -75,5 +70,5 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npx inngest-cli dev -u http://localhost:3001/api/inngest --host 127.0.0.1 --port 3000"
+args = "npx inngest-cli dev -u http://localhost:5000/api/inngest --host 0.0.0.0 --port 3000"
 waitForPort = 3000
