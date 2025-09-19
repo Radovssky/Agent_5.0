@@ -1,13 +1,13 @@
-modules = ["nodejs-20", "bash", "postgresql-16"]
+modules = ["nodejs-20", "bash", "postgresql-16", "python-3.11"]
 
 [agent]
 stack = "AGENT_STACK"
-integrations = ["agentstack-trigger-telegram:1.0.0", "javascript_database:1.0.0"]
+integrations = ["agentstack-trigger-telegram:1.0.0", "javascript_database:1.0.0", "python_openai:1.0.0"]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["jq"]
+packages = ["ffmpeg", "gitFull", "jq", "playwright-driver"]
 
 [deployment]
 build = ["npm", "run", "build"]
@@ -29,6 +29,10 @@ localPort = 8289
 [[ports]]
 localPort = 35117
 externalPort = 3001
+
+[[ports]]
+localPort = 36071
+externalPort = 4200
 
 [[ports]]
 localPort = 50052
