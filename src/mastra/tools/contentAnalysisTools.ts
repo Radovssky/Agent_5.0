@@ -26,95 +26,177 @@ export const videoTranscriptionTool = createTool({
   }),
   execute: async ({ context, mastra }) => {
     const logger = mastra?.getLogger();
-    logger?.info('🔧 [VideoTranscription] Starting execution with params:', context);
+    logger?.info('🔧 [VideoTranscription] Starting REAL audio transcription with params:', context);
     
     try {
-      // Создаем OpenAI клиент
+      logger?.info('🎵 [VideoTranscription] Using FFmpeg + OpenAI Whisper for real audio transcription...');
+      
+      // Вызываем Python скрипт для реальной аудио обработки
+      const { spawn } = require('child_process');
+      const path = require('path');
+      
+      const pythonScript = path.join(process.cwd(), 'scripts', 'audio_processor.py');
+      
+      return new Promise((resolve) => {
+        const python = spawn('python3', [pythonScript, context.video_url]);
+        
+        let stdout = '';
+        let stderr = '';
+        
+        python.stdout.on('data', (data: any) => {
+          stdout += data.toString();
+        });
+        
+        python.stderr.on('data', (data: any) => {
+          stderr += data.toString();
+        });
+        
+        python.on('close', async (code: any) => {
+          try {
+            if (code === 0 && stdout.trim()) {
+              // Парсим результат Python скрипта
+              const result = JSON.parse(stdout.trim());
+              
+              if (result.success) {
+                logger?.info(`✅ [VideoTranscription] Real transcription completed: ${result.transcript.length} characters`);
+                
+                // Переводим на русский если нужно
+                let transcript_ru = undefined;
+                if (context.auto_translate && result.language !== 'russian') {
+                  try {
+                    const openaiClient = createOpenAI({
+                      baseURL: process.env.OPENAI_BASE_URL || undefined,
+                      apiKey: process.env.OPENAI_API_KEY,
+                    });
+                    
+                    const { text: translation } = await generateText({
+                      // the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+                      // do not change this unless explicitly requested by the user
+                      model: openaiClient("gpt-5"),
+                      messages: [
+                        {
+                          role: "user",
+                          content: `Переведите этот текст на русский язык, сохраняя смысл и стиль:\n\n${result.transcript}`
+                        }
+                      ],
+                      maxTokens: 1000,
+                    });
+                    transcript_ru = translation;
+                    logger?.info('✅ [VideoTranscription] Translation to Russian completed');
+                  } catch (translateError) {
+                    logger?.warn('⚠️ [VideoTranscription] Translation failed, continuing without it');
+                  }
+                }
+                
+                // Извлекаем ключевые слова из транскрипта
+                const keywords = result.transcript
+                  .toLowerCase()
+                  .replace(/[^\w\s]/g, ' ')
+                  .split(/\s+/)
+                  .filter((word: string) => word.length > 3)
+                  .slice(0, 8);
+                
+                resolve({
+                  success: true,
+                  transcript: result.transcript,
+                  transcript_ru: transcript_ru,
+                  keywords: keywords,
+                  language_detected: result.language || "en",
+                  message: `Реальная транскрипция выполнена успешно (${result.language || 'en'}). Стоимость: ~$${result.estimated_cost?.toFixed(4) || '0.0000'}`
+                });
+              } else {
+                throw new Error(result.message || 'Audio processing failed');
+              }
+            } else {
+              throw new Error(`Python script failed with code ${code}: ${stderr}`);
+            }
+          } catch (parseError) {
+            logger?.error('❌ [VideoTranscription] Failed to parse Python result:', parseError);
+            
+            // Fallback к старому методу
+            logger?.info('🔄 [VideoTranscription] Falling back to metadata analysis...');
+            const fallbackResult = await fallbackAnalysis(context, mastra);
+            resolve(fallbackResult);
+          }
+        });
+        
+        // Timeout для Python скрипта (2 минуты)
+        setTimeout(() => {
+          python.kill();
+          logger?.warn('⚠️ [VideoTranscription] Python script timeout, using fallback');
+          fallbackAnalysis(context, mastra).then(resolve);
+        }, 120000);
+      });
+      
+    } catch (error) {
+      logger?.error('❌ [VideoTranscription] Real transcription error:', error);
+      
+      // Fallback к анализу метаданных
+      return await fallbackAnalysis(context, mastra);
+    }
+  },
+});
+
+// Функция fallback для анализа метаданных
+async function fallbackAnalysis(context: any, mastra: any) {
+  const logger = mastra?.getLogger();
+    try {
       const openaiClient = createOpenAI({
         baseURL: process.env.OPENAI_BASE_URL || undefined,
         apiKey: process.env.OPENAI_API_KEY,
       });
       
-      logger?.info('📝 [VideoTranscription] Analyzing video content with GPT-4...');
-      
-      // Формируем контент для анализа
       const contentToAnalyze = `
 Заголовок видео: "${context.title}"
 ${context.description ? `Описание: "${context.description}"` : ''}
 Платформа: ${context.platform}
-URL: ${context.video_url}
       `.trim();
       
-      // Анализируем контент через GPT-4
       const { text: analysisResult } = await generateText({
-        model: openaiClient("gpt-4o"),
+        // the newest OpenAI model is "gpt-5" which was released August 7, 2025.
+        // do not change this unless explicitly requested by the user
+        model: openaiClient("gpt-5"),
         messages: [
           {
             role: "system",
-            content: `Вы - эксперт по анализу видеоконтента. Ваша задача - проанализировать заголовок и описание видео, и предоставить:
-
-1. ВЕРОЯТНЫЙ ТРАНСКРИПТ (50-100 слов) - как мог бы звучать контент этого видео на основе заголовка
-2. РУССКИЙ ПЕРЕВОД ТРАНСКРИПТА - перевод на русский язык
-3. КЛЮЧЕВЫЕ СЛОВА (5-8 слов) - основные темы и понятия
-4. ОПРЕДЕЛЕННЫЙ ЯЗЫК - язык оригинального контента
-
-Отвечайте строго в JSON формате:
+            content: `Проанализируйте заголовок и описание видео. Ответьте JSON:
 {
-  "transcript": "английский текст...",
-  "transcript_ru": "русский перевод...",
-  "keywords": ["слово1", "слово2", "слово3"],
+  "transcript": "предполагаемый контент видео на английском",
+  "transcript_ru": "русский перевод",
+  "keywords": ["ключевое", "слово"],
   "language_detected": "en"
 }`
           },
           {
             role: "user", 
-            content: `Проанализируйте это видео:\n\n${contentToAnalyze}`
+            content: contentToAnalyze
           }
         ],
-        temperature: 0.7,
         maxTokens: 500,
       });
       
-      // Парсим результат
-      let parsedResult;
-      try {
-        parsedResult = JSON.parse(analysisResult);
-      } catch (parseError) {
-        logger?.warn('⚠️ [VideoTranscription] Failed to parse GPT-4 response, using fallback');
-        // Fallback при ошибке парсинга
-        parsedResult = {
-          transcript: `This video about "${context.title}" provides valuable insights and practical tips for viewers interested in this topic.`,
-          transcript_ru: `Это видео про "${context.title}" предоставляет ценные инсайты и практические советы для зрителей, интересующихся данной темой.`,
-          keywords: ["полезно", "совет", "тема", "контент", "информация"],
-          language_detected: "en"
-        };
-      }
+      const parsedResult = JSON.parse(analysisResult);
       
-      logger?.info('✅ [VideoTranscription] Content analysis completed successfully');
       return {
         success: true,
         transcript: parsedResult.transcript,
         transcript_ru: context.auto_translate ? parsedResult.transcript_ru : undefined,
         keywords: parsedResult.keywords || [],
         language_detected: parsedResult.language_detected || "en",
-        message: "Анализ контента выполнен успешно с помощью GPT-4"
+        message: "Использован анализ метаданных (реальная транскрипция недоступна)"
       };
-      
-    } catch (error) {
-      logger?.error('❌ [VideoTranscription] Analysis error:', error);
-      
-      // Fallback при полной ошибке
+    } catch (fallbackError) {
+      logger?.error('❌ [FallbackAnalysis] Fallback error:', fallbackError);
       return {
-        success: true, // Возвращаем success для продолжения работы
-        transcript: `This video titled "${context.title}" discusses the main topic with useful information for viewers.`,
-        transcript_ru: context.auto_translate ? `Это видео с заголовком "${context.title}" обсуждает основную тему с полезной информацией для зрителей.` : undefined,
+        success: true,
+        transcript: `This video about "${context.title}" discusses the main topic with useful information for viewers.`,
+        transcript_ru: context.auto_translate ? `Это видео про "${context.title}" обсуждает основную тему с полезной информацией для зрителей.` : undefined,
         keywords: ["полезно", "видео", "тема", "информация"],
         language_detected: "en",
-        message: `Использован базовый анализ из-за ошибки: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Использован базовый анализ: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`
       };
     }
-  },
-});
+}
 
 // Инструмент для анализа метрик и engagement видео
 export const videoMetricsAnalysisTool = createTool({
