@@ -142,15 +142,19 @@ export const youtubeSearchTool = createTool({
         };
       });
       
+      // Ограничиваем до запрошенного количества результатов
+      const limitedVideos = videos.slice(0, context.max_results);
+      
       logger?.info('✅ [YouTubeSearch] Completed successfully, found videos:', { 
-        count: videos.length,
-        totalViews: videos.reduce((sum: number, v: any) => sum + v.views, 0)
+        totalFound: videos.length,
+        returned: limitedVideos.length,
+        totalViews: limitedVideos.reduce((sum: number, v: any) => sum + v.views, 0)
       });
       
       return {
         success: true,
-        videos: videos,
-        message: `Найдено ${videos.length} популярных видео на YouTube по теме "${context.topic}"`
+        videos: limitedVideos,
+        message: `Найдено ${limitedVideos.length} популярных видео на YouTube по теме "${context.topic}" (отфильтровано из ${videos.length} результатов)`
       };
       
     } catch (error) {
